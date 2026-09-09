@@ -1,0 +1,13 @@
+[package]
+name = "syslog-agent-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+toml = "0.8"
+time = { version = "0.3", features = ["parsing", "formatting"] }
+idna = "1"
+

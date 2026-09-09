@@ -1,0 +1,17 @@
+[package]
+name = "syslog-agent-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "syslog-dtls-agent"
+path = "src/main.rs"
+
+[dependencies]
+syslog-agent-core.workspace = true
+syslog-agent-dtls-openssl.workspace = true
+serde_json.workspace = true
+clap = { version = "4", features = ["derive"] }
+ctrlc = { version = "3", features = ["termination"] }
+

@@ -1,0 +1,16 @@
+[package]
+name = "syslog-agent-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+syslog-agent-core.workspace = true
+syslog-agent-dtls-openssl.workspace = true
+serde.workspace = true
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+

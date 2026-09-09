@@ -1,0 +1,12 @@
+{
+  "name": "syslog-dtls-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "desktop": "cd crates/desktop && tauri dev",
+    "desktop:build": "cd crates/desktop && tauri build",
+    "test:ui": "node --test tests/ui/*.test.mjs"
+  },
+  "devDependencies": { "@tauri-apps/cli": "^2" }
+}

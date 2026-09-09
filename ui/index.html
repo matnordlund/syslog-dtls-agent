@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Syslog DTLS Agent</title><link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="#overview" aria-label="Syslog DTLS Agent overview"><span class="brand-mark">↗</span><span>SYSLOG<span class="brand-sub">DTLS AGENT</span></span></a>
+      <div class="workspace-label">WORKSPACE</div>
+      <nav aria-label="Main navigation">
+        <button class="nav-item active" data-tab="overview"><span aria-hidden="true">◫</span> Overview</button>
+        <button class="nav-item" data-tab="settings"><span aria-hidden="true">⇄</span> Connection</button>
+        <button class="nav-item" data-tab="diagnostics"><span aria-hidden="true">≡</span> Diagnostics</button>
+      </nav>
+      <div class="sidebar-note"><span class="small-dot"></span> LOCAL RELAY<br><p>Your messages stay on your infrastructure.</p></div>
+      <div class="sidebar-bottom"><span class="version">v0.1.0 · MVP</span><span class="security-tag">DTLS 1.2</span></div>
+    </aside>
+    <main>
+      <header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <strong id="page-name">Overview</strong></div><span class="local-label"><span class="small-dot"></span> Runs on this device</span></header>
+      <div class="content">
+        <div id="notice" role="status" aria-live="polite" hidden></div>
+        <section id="overview" class="page">
+          <div class="page-heading"><div><div class="eyebrow">SYSLOG DTLS AGENT</div><h1>Your relay, at a glance.</h1><p class="subtitle">Local messages. An encrypted route to your collector.</p></div><button id="toggle-relay" class="button primary"><span aria-hidden="true">▶</span> Start relay</button></div>
+          <div class="route-card">
+            <div class="card-top"><span class="card-label">RELAY STATUS</span><span id="overall-state" class="badge">Stopped</span></div>
+            <div class="route">
+              <div class="route-node"><div class="node-icon">⇥</div><div class="node-caption">LOCAL LISTENER</div><strong id="listener-endpoint">127.0.0.1:1514</strong><div id="listener-state" class="node-state">Not listening</div></div>
+              <div class="route-line"><span>UDP → bounded queue → DTLS</span><div class="line"><i></i></div><small>Certificate verification required</small></div>
+              <div class="route-node"><div class="node-icon remote">↗</div><div class="node-caption">REMOTE COLLECTOR</div><strong id="remote-endpoint">Not configured</strong><div id="dtls-state" class="node-state">No association</div></div>
+            </div>
+            <div class="route-footer"><span><span class="lock" aria-hidden="true">◇</span> Mutual certificate authentication</span><button class="text-button" data-tab="settings">Connection settings <span aria-hidden="true">↗</span></button></div>
+          </div>
+          <div class="metrics">
+            <article class="metric"><div class="metric-name">Messages received <span>↓</span></div><strong id="received">0</strong><small>At the local UDP listener</small></article>
+            <article class="metric"><div class="metric-name">Messages forwarded <span>↗</span></div><strong id="forwarded">0</strong><small>Successful local DTLS writes</small></article>
+            <article class="metric"><div class="metric-name">Messages dropped <span>×</span></div><strong id="dropped">0</strong><small>Known application drops</small></article>
+          </div>
+          <div class="detail-grid">
+            <article class="card queue-card"><div class="card-top"><h2>Memory queue</h2><span class="badge subtle">DROP NEWEST</span></div><div class="queue-value"><strong id="queue-depth">0</strong><span>/ <span id="queue-limit">10,000</span> messages</span></div><progress id="queue-progress" max="10000" value="0" aria-label="Queue usage"></progress><div class="queue-meta"><span id="queue-bytes">0 B of 16 MiB</span><span id="in-flight">No write in progress</span></div><p class="muted">Pending messages are held during detected outages. The queue is cleared when the app exits.</p></article>
+            <article class="card activity-card"><div class="card-top"><h2>Recent activity</h2><span class="activity-icon">◷</span></div><dl><div><dt>Last received</dt><dd id="last-received">—</dd></div><div><dt>Last forwarded</dt><dd id="last-forwarded">—</dd></div><div><dt>Last handshake</dt><dd id="last-handshake">—</dd></div></dl></article>
+          </div>
+          <article class="card sources-card">
+            <div class="card-top"><h2>Source IPs</h2><span id="source-count" class="badge subtle">0 SOURCES</span></div>
+            <p class="muted">Allowed and blocked senders observed this session. Rates count successful local DTLS writes, not incoming datagrams.</p>
+            <div class="source-table-wrap"><table class="source-table"><thead><tr><th scope="col">Source IP</th><th scope="col">Access</th><th scope="col">Received</th><th scope="col">Forwarded</th><th scope="col" title="Messages forwarded in the last completed second">Msg/s</th><th scope="col" title="Messages forwarded in the last 60 completed seconds">Msg/min</th><th scope="col" title="Forwarded in the last 24 hours, with one-minute boundary precision">Last 24h</th><th scope="col">Dropped</th><th scope="col">Last seen</th></tr></thead><tbody id="source-rows"></tbody></table></div>
+            <p id="sources-empty" class="muted">No source traffic observed yet.</p>
+            <p id="source-overflow" class="error-panel" hidden></p>
+            <p class="muted">Msg/s and msg/min use completed seconds. The 24-hour count uses minute buckets and includes the current minute. In-memory history resets on relay restart.</p>
+          </article>
+          <div class="delivery-note"><span aria-hidden="true">ⓘ</span><p><strong>Best-effort delivery.</strong> DTLS writes do not acknowledge collector receipt. Messages may be lost or duplicated; an established association does not prove the collector is still online.</p></div>
+          <div id="last-error-panel" class="error-panel" hidden><strong>Latest relay error</strong><p id="last-error"></p></div>
+        </section>
+        <section id="settings" class="page" hidden>
+          <div class="page-heading"><div><div class="eyebrow">CONFIGURATION</div><h1>Build your connection.</h1><p class="subtitle">Settings apply on the next start. Stop the relay to make changes.</p></div></div>
+          <div class="config-actions"><button id="load-config" class="button">Open TOML…</button><button id="save-config" class="button">Save TOML…</button><button id="validate-config" class="button">Validate credentials</button></div>
+          <form id="config-form">
+            <fieldset id="config-fields">
+              <section class="card form-card"><div class="form-heading"><span class="step">01</span><div><h2>Local listener</h2><p>One RFC 5424 message per UDP datagram.</p></div></div><div class="form-grid"><label>Listen address<input id="listen-address" required value="127.0.0.1" spellcheck="false"><small>Loopback keeps input local to this device.</small></label><label>Listen port<input id="listen-port" type="number" min="1" max="65535" value="1514" required><small>Default 1514. Lower ports may require privileges.</small></label></div></section>
+              <section class="card form-card"><div class="form-heading"><span class="step">IP</span><div><h2>Source access</h2><p>Choose which source IPs may send logs. Changes apply on the next relay start.</p></div></div>
+                <div class="form-grid"><label class="full">Allowed sources<select id="source-mode"><option value="any">Allow any source IP</option><option value="allowlist">Only allowlisted IPs (whitelist)</option></select></label></div>
+                <div id="allowlist-editor"><p class="muted">Add exact IPv4 or IPv6 addresses. Source ports are ignored. Hostnames and CIDR ranges are not supported.</p>
+                  <div class="file-input"><input id="allowlist-ip" aria-label="IP address to allow" placeholder="192.0.2.10 or 2001:db8::10" spellcheck="false"><button id="add-allowed-ip" class="button" type="button">Add IP</button></div>
+                  <ul id="allowed-ip-list" class="allowed-ip-list" aria-label="Allowed IP addresses"></ul>
+                  <p id="allowlist-empty" class="muted">The allowlist is empty. In allowlist mode, all sources will be blocked.</p>
+                </div>
+                <p class="muted">UDP source IPs are not authenticated identities. Use network controls where sender authentication is required.</p>
+              </section>
+              <section class="card form-card"><div class="form-heading"><span class="step">02</span><div><h2>Remote collector</h2><p>Encrypted forwarding over DTLS 1.2 / UDP.</p></div></div><div class="form-grid"><label>Hostname or IP address<input id="remote-host" required placeholder="collector.example.com" spellcheck="false"></label><label>Destination port<input id="remote-port" type="number" min="1" max="65535" value="6514" required></label><label class="full">Expected server name <span class="optional">optional</span><input id="server-name" placeholder="Defaults to the destination hostname or IP" spellcheck="false"><small>Use a DNS identity here when connecting to an IP with a DNS certificate.</small></label></div></section>
+              <section class="card form-card"><div class="form-heading"><span class="step">03</span><div><h2>Certificates & trust</h2><p>PEM files are read by the Rust backend. Private keys never enter this interface.</p></div></div><div class="form-grid"><label class="full">Client certificate chain<div class="file-input"><input id="client-cert" required placeholder="Select a PEM certificate chain" spellcheck="false"><button class="button" type="button" data-pick="client-cert" aria-label="Browse for client certificate">Browse…</button></div></label><label class="full">Client private key<div class="file-input"><input id="client-key" required placeholder="Select a PEM private key" spellcheck="false"><button class="button" type="button" data-pick="client-key" aria-label="Browse for private key">Browse…</button></div><small>Unencrypted PEM for this MVP. Protect access using file permissions.</small></label><label class="full">Trusted CA bundle<div class="file-input"><input id="ca-bundle" required placeholder="Select a PEM CA bundle" spellcheck="false"><button class="button" type="button" data-pick="ca-bundle" aria-label="Browse for CA bundle">Browse…</button></div><small>Only these trust anchors are used. Chain and server-name verification are always enabled.</small></label></div></section>
+              <section class="card form-card"><div class="form-heading"><span class="step">04</span><div><h2>Buffering & transport</h2><p>Both queue limits include the message currently being written.</p></div></div><div class="form-grid">
+                <label>Queue message limit<input id="max-messages" type="number" min="1" max="1000000" required></label><label>Queue payload bytes<input id="max-bytes" type="number" min="1" max="1073741824" required></label>
+                <label>Maximum input bytes<input id="max-input" type="number" min="1" max="16378" required></label><label>Maximum UDP payload bytes<input id="datagram-bytes" type="number" min="576" max="16448" required><small>Includes DTLS overhead. Larger values may require IP fragmentation.</small></label>
+                <label>Forwarding rate, messages/second<input id="send-rate" type="number" min="1" max="100000" required></label><label>Shutdown drain timeout, ms<input id="drain-timeout" type="number" min="0" max="30000" required></label>
+                <label>Handshake / write timeout, ms<input id="handshake-timeout" type="number" min="100" max="120000" required></label><label>Initial reconnect delay, ms<input id="retry-initial" type="number" min="100" max="60000" required></label><label>Maximum reconnect delay, ms<input id="retry-max" type="number" min="100" max="300000" required></label>
+              </div><p class="muted">A frame must fit the negotiated DTLS payload budget. Larger messages are dropped whole, never truncated. Rate limiting is not network congestion control.</p></section>
+            </fieldset>
+          </form>
+          <div class="settings-footer"><span>Configuration contains file references only.</span><button id="start-from-settings" class="button primary">Start relay ↗</button></div>
+        </section>
+        <section id="diagnostics" class="page" hidden>
+          <div class="page-heading"><div><div class="eyebrow">DIAGNOSTICS</div><h1>Know what’s happening.</h1><p class="subtitle">Session counters and public connection metadata. No message contents.</p></div></div>
+          <div class="card"><h2>Drop accounting</h2><dl class="diagnostic-list"><div><dt>Source IP not allowed</dt><dd id="drop-denied">0</dd></div><div><dt>Invalid RFC 5424 input</dt><dd id="drop-invalid">0</dd></div><div><dt>Input or DTLS frame too large</dt><dd id="drop-oversized">0</dd></div><div><dt>Queue full</dt><dd id="drop-full">0</dd></div><div><dt>Discarded on shutdown</dt><dd id="drop-shutdown">0</dd></div><div><dt>Reconnect / failure count</dt><dd id="retry-count">0</dd></div></dl></div>
+          <div class="card"><h2>Association details</h2><dl class="diagnostic-list"><div><dt>Active remote address</dt><dd id="active-address">—</dd></div><div><dt>Protocol</dt><dd id="protocol">—</dd></div><div><dt>Cipher</dt><dd id="cipher">—</dd></div><div><dt>Client certificate fingerprint</dt><dd id="client-fingerprint" class="fingerprint">—</dd></div><div><dt>Last peer certificate fingerprint</dt><dd id="peer-fingerprint" class="fingerprint">—</dd></div></dl></div>
+          <p class="muted">Counters reset on each start. Queue depth includes in-flight messages. Kernel and network loss may be unobservable. Closing the application stops the relay; this MVP is not an installed system service.</p>
+        </section>
+      </div>
+      <footer class="app-footer"><span><span class="small-dot"></span> Server verification always on</span><span>Open source · Built with Rust</span></footer>
+    </main>
+  </div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

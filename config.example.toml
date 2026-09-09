@@ -1,0 +1,40 @@
+schema_version = 1
+
+[source_access]
+# "any" preserves the original behavior; "allowlist" blocks unlisted sources.
+mode = "any"
+# Exact IPv4 / IPv6 addresses. An empty allowlist blocks every source in allowlist mode.
+allowed_ips = []
+
+[listener]
+address = "127.0.0.1"
+port = 1514
+max_message_bytes = 8192
+
+[remote]
+host = "collector.example.com"
+port = 6514
+# Set when connecting by IP but validating a DNS certificate:
+# expected_server_name = "collector.example.com"
+
+[identity]
+provider = "pem"
+certificate_chain = "client.pem"
+private_key = "client-key.pem"
+
+[trust]
+provider = "pem_ca"
+ca_bundle = "ca.pem"
+
+[queue]
+max_messages = 10000
+max_bytes = 16777216
+
+[dtls]
+handshake_timeout_ms = 10000
+retry_initial_ms = 1000
+retry_max_ms = 60000
+# UDP payload including DTLS overhead; larger messages are dropped, not truncated.
+datagram_bytes = 1200
+messages_per_second = 1000
+shutdown_drain_ms = 2000

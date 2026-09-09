@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Syslog DTLS Agent",
+  "version": "0.1.0",
+  "identifier": "org.syslog-dtls-agent.desktop",
+  "build": { "frontendDist": "../../ui" },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [{ "title": "Syslog DTLS Agent", "width": 1140, "height": 850, "minWidth": 760, "minHeight": 600 }],
+    "security": { "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-src 'none'" }
+  },
+  "bundle": { "active": true, "targets": "all", "category": "DeveloperTool", "shortDescription": "Secure, bounded UDP syslog relay", "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"], "resources": { "../../licenses/": "licenses/", "../../LICENSE": "LICENSE", "../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md" } }
+}

@@ -28,7 +28,7 @@ async function mount(overrides={}){
   const doc={createElement:()=>new Element(),getElementById:id=>{assert.ok(elements.has(id),`Missing DOM id: ${id}`);return elements.get(id);},querySelector:()=>brand,querySelectorAll:selector=>selector==='[data-tab]'||selector==='.nav-item'?nav:selector==='.page'?['overview','settings','diagnostics'].map(id=>Object.assign(elements.get(id),{id})):[]};
   const fn=new (Object.getPrototypeOf(async function(){}).constructor)('window','document','setTimeout',source);
   await fn({__TAURI__:{core:{invoke}},scrollTo(){}},doc,()=>{});
-  return{get:id=>elements.get(id),calls};
+  return{get:id=>elements.get(id),calls,nav};
 }
 test('start sends configurable input port and secret references; locks settings until stopped',async()=>{
   const {get,calls}=await mount();
@@ -80,4 +80,18 @@ test('source table renders forwarded rates, blocked status and tracking overflow
   assert.equal(get('sources-empty').hidden,true);
   assert.equal(get('source-overflow').hidden,false);
   assert.match(get('source-overflow').textContent,/2 datagrams/);
+});
+
+test('relay notices stay inside Overview and remain visible when navigating to settings',async()=>{
+  const {get,nav}=await mount();
+  await get('toggle-relay').click();
+  assert.match(get('relay-notice').textContent,/Relay started/);
+  assert.equal(get('relay-notice').hidden,false);
+  assert.equal(get('notice').hidden,true);
+  await nav[1].click();
+  assert.equal(get('notice').hidden,false);
+  await nav[0].click();
+  assert.equal(get('notice').hidden,true);
+  await get('toggle-relay').click();
+  assert.match(get('relay-notice').textContent,/Relay stopped/);
 });

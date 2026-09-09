@@ -30,6 +30,7 @@
               <div class="route-line"><span>UDP → bounded queue → DTLS</span><div class="line"><i></i></div><small>Certificate verification required</small></div>
               <div class="route-node"><div class="node-icon remote">↗</div><div class="node-caption">REMOTE COLLECTOR</div><strong id="remote-endpoint">Not configured</strong><div id="dtls-state" class="node-state">No association</div></div>
             </div>
+            <div id="relay-notice" role="status" aria-live="polite" hidden></div>
             <div class="route-footer"><span><span class="lock" aria-hidden="true">◇</span> Mutual certificate authentication</span><button class="text-button" data-tab="settings">Connection settings <span aria-hidden="true">↗</span></button></div>
           </div>
           <div class="metrics">
@@ -37,18 +38,18 @@
             <article class="metric"><div class="metric-name">Messages forwarded <span>↗</span></div><strong id="forwarded">0</strong><small>Successful local DTLS writes</small></article>
             <article class="metric"><div class="metric-name">Messages dropped <span>×</span></div><strong id="dropped">0</strong><small>Known application drops</small></article>
           </div>
+          <article class="card sources-card">
+            <div class="card-top"><h2>Source IPs</h2><span id="source-count" class="badge subtle">0 SOURCES</span></div>
+            <p class="muted">Forwarding activity by source IP · Allowed and blocked senders</p>
+            <div class="source-table-wrap"><table class="source-table"><thead><tr><th scope="col">Source IP</th><th scope="col">Access</th><th scope="col">Received</th><th scope="col">Forwarded</th><th scope="col" title="Messages forwarded in the last completed second">Msg/s</th><th scope="col" title="Messages forwarded in the last 60 completed seconds">Msg/min</th><th scope="col" title="Forwarded in the last 24 hours, with one-minute boundary precision">Last 24h</th><th scope="col">Dropped</th><th scope="col">Last seen</th></tr></thead><tbody id="source-rows"></tbody></table></div>
+            <p id="sources-empty" class="muted">No source traffic observed yet.</p>
+            <p id="source-overflow" class="error-panel" hidden></p>
+            <p class="muted">Forwarded-message rates · History resets when the relay restarts. <span title="Msg/s and msg/min use completed seconds. Last 24h uses minute buckets and includes the current minute.">Rate details ⓘ</span></p>
+          </article>
           <div class="detail-grid">
             <article class="card queue-card"><div class="card-top"><h2>Memory queue</h2><span class="badge subtle">DROP NEWEST</span></div><div class="queue-value"><strong id="queue-depth">0</strong><span>/ <span id="queue-limit">10,000</span> messages</span></div><progress id="queue-progress" max="10000" value="0" aria-label="Queue usage"></progress><div class="queue-meta"><span id="queue-bytes">0 B of 16 MiB</span><span id="in-flight">No write in progress</span></div><p class="muted">Pending messages are held during detected outages. The queue is cleared when the app exits.</p></article>
             <article class="card activity-card"><div class="card-top"><h2>Recent activity</h2><span class="activity-icon">◷</span></div><dl><div><dt>Last received</dt><dd id="last-received">—</dd></div><div><dt>Last forwarded</dt><dd id="last-forwarded">—</dd></div><div><dt>Last handshake</dt><dd id="last-handshake">—</dd></div></dl></article>
           </div>
-          <article class="card sources-card">
-            <div class="card-top"><h2>Source IPs</h2><span id="source-count" class="badge subtle">0 SOURCES</span></div>
-            <p class="muted">Allowed and blocked senders observed this session. Rates count successful local DTLS writes, not incoming datagrams.</p>
-            <div class="source-table-wrap"><table class="source-table"><thead><tr><th scope="col">Source IP</th><th scope="col">Access</th><th scope="col">Received</th><th scope="col">Forwarded</th><th scope="col" title="Messages forwarded in the last completed second">Msg/s</th><th scope="col" title="Messages forwarded in the last 60 completed seconds">Msg/min</th><th scope="col" title="Forwarded in the last 24 hours, with one-minute boundary precision">Last 24h</th><th scope="col">Dropped</th><th scope="col">Last seen</th></tr></thead><tbody id="source-rows"></tbody></table></div>
-            <p id="sources-empty" class="muted">No source traffic observed yet.</p>
-            <p id="source-overflow" class="error-panel" hidden></p>
-            <p class="muted">Msg/s and msg/min use completed seconds. The 24-hour count uses minute buckets and includes the current minute. In-memory history resets on relay restart.</p>
-          </article>
           <div class="delivery-note"><span aria-hidden="true">ⓘ</span><p><strong>Best-effort delivery.</strong> DTLS writes do not acknowledge collector receipt. Messages may be lost or duplicated; an established association does not prove the collector is still online.</p></div>
           <div id="last-error-panel" class="error-panel" hidden><strong>Latest relay error</strong><p id="last-error"></p></div>
         </section>

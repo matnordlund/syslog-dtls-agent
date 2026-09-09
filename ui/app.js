@@ -1,12 +1,24 @@
 const $ = id => document.getElementById(id);
 const invoke = window.__TAURI__?.core.invoke;
-let running = false, busy = false, config, allowedIps = [];
+let running = false, busy = false, config, allowedIps = [], activeTab = 'overview';
 const count = value => new Intl.NumberFormat().format(value ?? 0);
 const timestamp = value => value ? new Date(value).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '—';
 const bytes = value => value >= 1048576 ? `${(value/1048576).toFixed(1).replace('.0','')} MiB` : value >= 1024 ? `${(value/1024).toFixed(1)} KiB` : `${value} B`;
 const set = (id,value) => { $(id).textContent = value; };
-function notice(message,error=false) { $('notice').textContent=message; $('notice').classList.toggle('error',error); $('notice').hidden=!message; }
+function notice(message,error=false) {
+  for(const id of ['notice','relay-notice']) {
+    set(id,message);
+    $(id).classList.toggle('error',error);
+  }
+  noticeVisibility();
+}
+function noticeVisibility() {
+  $('notice').hidden=activeTab==='overview'||!$('notice').textContent;
+  $('relay-notice').hidden=!$('relay-notice').textContent;
+}
 function tab(name) {
+  activeTab=name;
+  noticeVisibility();
   document.querySelectorAll('.page').forEach(el=>{el.hidden=el.id!==name;});
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.tab===name));
   set('page-name',{overview:'Overview',settings:'Connection',diagnostics:'Diagnostics'}[name]);

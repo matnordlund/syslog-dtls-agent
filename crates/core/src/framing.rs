@@ -100,13 +100,12 @@ pub fn valid_message(m: &[u8]) -> bool {
                 match rest.get(i) {
                     Some(b'"') => break,
                     Some(b']') | None => return false,
-                    Some(b'\\') => {
+                    Some(b'\\')
                         if rest
                             .get(i + 1)
-                            .is_some_and(|b| matches!(b, b'"' | b'\\' | b']'))
-                        {
-                            i += 1;
-                        }
+                            .is_some_and(|b| matches!(b, b'"' | b'\\' | b']')) =>
+                    {
+                        i += 1;
                     }
                     _ => {}
                 }

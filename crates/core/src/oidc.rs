@@ -84,64 +84,6 @@ impl Oidc {
         Ok(())
     }
 }
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn secrets_roundtrip_but_debug_is_redacted_and_legacy_configs_migrate() {
-        let config = Oidc {
-            client_secret: "  secret-value  ".into(),
-            ..Default::default()
-        };
-        let text = toml::to_string(&config).unwrap();
-        let loaded: Oidc = toml::from_str(&text).unwrap();
-        assert_eq!(loaded.client_secret, "  secret-value  ");
-        assert!(!format!("{loaded:?}").contains("secret-value"));
-        let old: Oidc = toml::from_str(
-            "issuer_url = 'http://id.internal/realm'\nclient_secret_env = 'OLD_SECRET'",
-        )
-        .unwrap();
-        assert_eq!(
-            old.discovery_uri,
-            "http://id.internal/realm/.well-known/openid-configuration"
-        );
-        assert!(old.client_secret.is_empty());
-        assert!(
-            toml::from_str::<Oidc>("enabled = true\nclient_secret_env = 'OLD_SECRET'").is_err()
-        );
-    }
-    #[test]
-    fn accept_http_and_https_and_require_complete_authorization() {
-        assert!(Oidc::default().validate().is_ok());
-        let mut config = Oidc {
-            enabled: true,
-            discovery_uri: "https://id.example/realm/.well-known/openid-configuration".into(),
-            public_url: "https://agent.example".into(),
-            client_id: "agent".into(),
-            required_group: "operators".into(),
-            ..Default::default()
-        };
-        assert!(config.validate().is_ok());
-        config.public_url = "http://192.0.2.1:1080".into();
-        config.discovery_uri = "http://identity.internal/custom-discovery".into();
-        assert!(config.validate().is_ok());
-        config.public_url = "http://127.0.0.1:1080".into();
-        assert!(config.validate().is_ok());
-        config.public_url = "http://agent.internal/?query".into();
-        assert!(config.validate().is_err());
-        assert!(http_url("http://identity.internal/discovery?appid=agent").is_ok());
-        config.required_group.clear();
-        assert!(config.validate().is_err());
-        for value in [
-            "https://user:secret@host/",
-            "file:///tmp",
-            "https://host/#fragment",
-        ] {
-            assert!(http_url(value).is_err());
-        }
-    }
-}
-
 impl std::fmt::Debug for Oidc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Oidc")
@@ -215,5 +157,63 @@ impl TryFrom<OidcInput> for Oidc {
             required_group: value.required_group,
             scopes: value.scopes,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn secrets_roundtrip_but_debug_is_redacted_and_legacy_configs_migrate() {
+        let config = Oidc {
+            client_secret: "  secret-value  ".into(),
+            ..Default::default()
+        };
+        let text = toml::to_string(&config).unwrap();
+        let loaded: Oidc = toml::from_str(&text).unwrap();
+        assert_eq!(loaded.client_secret, "  secret-value  ");
+        assert!(!format!("{loaded:?}").contains("secret-value"));
+        let old: Oidc = toml::from_str(
+            "issuer_url = 'http://id.internal/realm'\nclient_secret_env = 'OLD_SECRET'",
+        )
+        .unwrap();
+        assert_eq!(
+            old.discovery_uri,
+            "http://id.internal/realm/.well-known/openid-configuration"
+        );
+        assert!(old.client_secret.is_empty());
+        assert!(
+            toml::from_str::<Oidc>("enabled = true\nclient_secret_env = 'OLD_SECRET'").is_err()
+        );
+    }
+    #[test]
+    fn accept_http_and_https_and_require_complete_authorization() {
+        assert!(Oidc::default().validate().is_ok());
+        let mut config = Oidc {
+            enabled: true,
+            discovery_uri: "https://id.example/realm/.well-known/openid-configuration".into(),
+            public_url: "https://agent.example".into(),
+            client_id: "agent".into(),
+            required_group: "operators".into(),
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
+        config.public_url = "http://192.0.2.1:1080".into();
+        config.discovery_uri = "http://identity.internal/custom-discovery".into();
+        assert!(config.validate().is_ok());
+        config.public_url = "http://127.0.0.1:1080".into();
+        assert!(config.validate().is_ok());
+        config.public_url = "http://agent.internal/?query".into();
+        assert!(config.validate().is_err());
+        assert!(http_url("http://identity.internal/discovery?appid=agent").is_ok());
+        config.required_group.clear();
+        assert!(config.validate().is_err());
+        for value in [
+            "https://user:secret@host/",
+            "file:///tmp",
+            "https://host/#fragment",
+        ] {
+            assert!(http_url(value).is_err());
+        }
     }
 }

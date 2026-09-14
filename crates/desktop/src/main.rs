@@ -126,7 +126,8 @@ async fn save_config(app: tauri::AppHandle, config: Config) -> Result<bool, Stri
         else {
             return Ok(false);
         };
-        std::fs::write(PathBuf::from(path.to_string()), config.to_toml()?)
+        config
+            .save(&PathBuf::from(path.to_string()))
             .map_err(|e| format!("Cannot save configuration: {e}"))?;
         Ok(true)
     })

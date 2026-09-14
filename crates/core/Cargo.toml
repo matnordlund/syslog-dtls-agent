@@ -11,3 +11,4 @@ toml = "0.8"
 time = { version = "0.3", features = ["parsing", "formatting"] }
 idna = "1"
 
+url = "2"

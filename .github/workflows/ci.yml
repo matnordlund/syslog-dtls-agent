@@ -40,10 +40,17 @@ jobs:
       - run: cargo build --locked -p syslog-agent-cli
       - name: DTLS interoperability (Linux)
         if: runner.os == 'Linux'
-        run: python3 tests/interop.py
+        run: |
+          python3 tests/interop.py
+          python3 tests/http_ui.py
+          python3 tests/oidc.py
       - name: DTLS interoperability (macOS)
         if: runner.os == 'macOS'
-        run: OPENSSL_BIN="$(brew --prefix openssl@3)/bin/openssl" python3 tests/interop.py
+        run: |
+          export OPENSSL_BIN="$(brew --prefix openssl@3)/bin/openssl"
+          python3 tests/interop.py
+          python3 tests/http_ui.py
+          python3 tests/oidc.py
       - name: Desktop build (no signing or publishing)
         run: npm run desktop:build -- --no-bundle
       - uses: actions/upload-artifact@v4

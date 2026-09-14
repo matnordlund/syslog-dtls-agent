@@ -1,5 +1,56 @@
 const $ = id => document.getElementById(id);
-const invoke = window.__TAURI__?.core.invoke;
+const httpMode = window.__SYSLOG_HTTP__ === true;
+const invoke = window.__TAURI__?.core.invoke ?? (httpMode ? async (command,args={}) => {
+  const response = await fetch(`/api/${command}`, {method:'POST',headers:{'Content-Type':'application/json','X-Syslog-UI':'1'},body:JSON.stringify(args)});
+  const result = await response.json();
+  if(response.status===401){if(!loggingOut)window.location.assign('/auth/login');throw new Error('Sign in required');}
+  if(!response.ok)throw new Error(result.error || 'Agent request failed');
+  return result;
+} : null);
+if(httpMode){
+  $('session-note').textContent='Counters reset on each start. Queue depth includes in-flight messages. Kernel and network loss may be unobservable. Closing this browser does not stop the agent.';
+  $('load-config').textContent='Reload configuration';
+  $('save-config').textContent='Save configuration';
+  document.querySelectorAll('[data-pick]').forEach(el=>{el.hidden=true;});
+  document.querySelectorAll('.file-input input').forEach(el=>{el.placeholder='Path on the agent machine';});
+  document.querySelector('.local-label').textContent='Browser connected to agent';
+}
+let loggingOut = false;
+$('user-account').hidden=!httpMode||window.__SYSLOG_OIDC__!==true;
+function closeUserMenu(restoreFocus=false){
+  $('user-menu').hidden=true;
+  $('user-menu-toggle').setAttribute('aria-expanded','false');
+  if(restoreFocus)$('user-menu-toggle').focus();
+}
+$('user-menu-toggle').addEventListener('click',()=>{
+  const open=$('user-menu').hidden;
+  $('user-menu').hidden=!open;
+  $('user-menu-toggle').setAttribute('aria-expanded',String(open));
+});
+document.addEventListener('click',event=>{
+  if(!$('user-account').contains(event.target))closeUserMenu();
+});
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&!$('user-menu').hidden)closeUserMenu(true);
+});
+$('oidc-logout').addEventListener('click',()=>action(async()=>{
+  loggingOut=true;
+  try{
+    const response=await fetch('/auth/logout',{method:'POST',headers:{'X-Syslog-UI':'1'}});
+    if(!response.ok)throw new Error('Could not sign out');
+    const result=await response.json();
+    closeUserMenu();
+    window.location.assign(result.redirect==='/auth/end-session'?'/auth/end-session':'/auth/signed-out');
+  }catch(error){loggingOut=false;throw error;}
+}));
+async function loadUser(){
+  if($('user-account').hidden)return;
+  const response=await fetch('/auth/session',{method:'GET'});
+  if(response.status===401){window.location.assign('/auth/login');return;}
+  if(!response.ok)throw new Error('Could not load signed-in user');
+  const session=await response.json();
+  $('user-menu-name').textContent=session.username;
+}
 let running = false, busy = false, config, allowedIps = [], activeTab = 'overview';
 const count = value => new Intl.NumberFormat().format(value ?? 0);
 const timestamp = value => value ? new Date(value).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '—';
@@ -30,6 +81,7 @@ function controls() {
   $('config-fields').disabled=running||busy;
   for(const id of ['load-config','save-config','validate-config','start-from-settings']) $(id).disabled=busy||running||!invoke;
   updateAccessControls();
+  updateOidcControls();
   $('toggle-relay').disabled=busy||!invoke;
   $('toggle-relay').classList.toggle('danger',running);
   set('toggle-relay',busy?'Working…':running?'■  Stop relay':'▶  Start relay');
@@ -41,6 +93,12 @@ async function action(fn) {
   try{await fn();}catch(error){notice(String(error),true);}finally{busy=false;controls();}
 }
 const fields={
+ 'oidc-enabled':c=>String(c.http?.oidc?.enabled??false),
+ 'oidc-discovery':c=>c.http?.oidc?.discovery_uri??'','oidc-client-id':c=>c.http?.oidc?.client_id??'',
+ 'oidc-client-secret':c=>c.http?.oidc?.client_secret??'','oidc-public-url':c=>c.http?.oidc?.public_url??'',
+ 'oidc-groups-claim':c=>c.http?.oidc?.groups_claim??'groups','oidc-required-group':c=>c.http?.oidc?.required_group??'',
+ 'oidc-scopes':c=>(c.http?.oidc?.scopes??[]).join(' '),
+ 'http-address':c=>c.http?.address??'127.0.0.1','http-port':c=>c.http?.port??1080,
  'listen-address':c=>c.listener.address,'listen-port':c=>c.listener.port,'max-input':c=>c.listener.max_message_bytes,
  'remote-host':c=>c.remote.host,'remote-port':c=>c.remote.port,'server-name':c=>c.remote.expected_server_name??'',
  'client-cert':c=>c.identity.certificate_chain,'client-key':c=>c.identity.private_key,'ca-bundle':c=>c.trust.ca_bundle,
@@ -48,10 +106,10 @@ const fields={
  'datagram-bytes':c=>c.dtls.datagram_bytes,'send-rate':c=>c.dtls.messages_per_second,'drain-timeout':c=>c.dtls.shutdown_drain_ms,
  'handshake-timeout':c=>c.dtls.handshake_timeout_ms,'retry-initial':c=>c.dtls.retry_initial_ms,'retry-max':c=>c.dtls.retry_max_ms
 };
-function populate(c){config=c;for(const[id,get]of Object.entries(fields))$(id).value=get(c);$('source-mode').value=c.source_access?.mode??'any';allowedIps=[...(c.source_access?.allowed_ips??[])];renderAllowlist();preview();}
+function populate(c){config=c;for(const[id,get]of Object.entries(fields))$(id).value=get(c);$('source-mode').value=c.source_access?.mode??'any';allowedIps=[...(c.source_access?.allowed_ips??[])];renderAllowlist();updateOidcControls();preview();}
 function read(){
-  const value=id=>$(id).value.trim(),num=id=>Number($(id).value);
-  return{schema_version:1,source_access:{mode:$('source-mode').value,allowed_ips:[...allowedIps]},listener:{address:value('listen-address'),port:num('listen-port'),max_message_bytes:num('max-input')},remote:{host:value('remote-host'),port:num('remote-port'),expected_server_name:value('server-name')||null},identity:{provider:'pem',certificate_chain:value('client-cert'),private_key:value('client-key')},trust:{provider:'pem_ca',ca_bundle:value('ca-bundle')},queue:{max_messages:num('max-messages'),max_bytes:num('max-bytes')},dtls:{datagram_bytes:num('datagram-bytes'),messages_per_second:num('send-rate'),shutdown_drain_ms:num('drain-timeout'),handshake_timeout_ms:num('handshake-timeout'),retry_initial_ms:num('retry-initial'),retry_max_ms:num('retry-max')}};
+  const value=id=>String($(id).value).trim(),num=id=>Number($(id).value);
+  return{schema_version:1,http:{address:value('http-address')||'127.0.0.1',port:value('http-port')?num('http-port'):1080,oidc:{enabled:value('oidc-enabled')==='true',discovery_uri:value('oidc-discovery'),client_id:value('oidc-client-id'),client_secret:String($('oidc-client-secret').value),public_url:value('oidc-public-url'),groups_claim:value('oidc-groups-claim')||'groups',required_group:value('oidc-required-group'),scopes:value('oidc-scopes').split(/\s+/).filter(Boolean)}},source_access:{mode:$('source-mode').value,allowed_ips:[...allowedIps]},listener:{address:value('listen-address'),port:num('listen-port'),max_message_bytes:num('max-input')},remote:{host:value('remote-host'),port:num('remote-port'),expected_server_name:value('server-name')||null},identity:{provider:'pem',certificate_chain:value('client-cert'),private_key:value('client-key')},trust:{provider:'pem_ca',ca_bundle:value('ca-bundle')},queue:{max_messages:num('max-messages'),max_bytes:num('max-bytes')},dtls:{datagram_bytes:num('datagram-bytes'),messages_per_second:num('send-rate'),shutdown_drain_ms:num('drain-timeout'),handshake_timeout_ms:num('handshake-timeout'),retry_initial_ms:num('retry-initial'),retry_max_ms:num('retry-max')}};
 }
 function preview(){if(!running){set('listener-endpoint',`${$('listen-address').value}:${$('listen-port').value}`);set('remote-endpoint',`${$('remote-host').value||'Not configured'}:${$('remote-port').value}`);set('queue-limit',count(Number($('max-messages').value)));}}
 $('config-form').addEventListener('input',preview);
@@ -92,14 +150,14 @@ function validForm(){
 $('toggle-relay').addEventListener('click',()=>action(async()=>{if(running){render(await invoke('stop'));notice('Relay stopped. Pending messages were drained or counted as shutdown drops.');}else await startRelay();}));
 $('start-from-settings').addEventListener('click',()=>action(startRelay));
 $('load-config').addEventListener('click',()=>action(async()=>{const result=await invoke('load_config');if(result){populate(result);notice('Configuration loaded. Start the relay to apply it.');}}));
-$('save-config').addEventListener('click',()=>action(async()=>{if(validForm()&&await invoke('save_config',{config:read()}))notice('Configuration saved.');}));
+$('save-config').addEventListener('click',()=>action(async()=>{if(validForm()&&await invoke('save_config',{config:read()}))notice('Configuration saved. HTTP listener and login changes apply after restarting the agent process.');}));
 $('validate-config').addEventListener('click',()=>action(async()=>{if(validForm())notice(await invoke('validate',{config:read()}));}));
 document.querySelectorAll('[data-pick]').forEach(el=>el.addEventListener('click',()=>action(async()=>{const path=await invoke('pick_file');if(path)$(el.dataset.pick).value=path;})));
 async function refresh(){
-  if(!busy&&invoke){try{render(await invoke('status'));}catch{notice('Cannot read relay status from the desktop backend.',true);}}
+  if(!busy&&invoke){try{render(await invoke('status'));}catch{notice('Cannot read relay status from the agent.',true);}}
   setTimeout(refresh,500);
 }
-if(invoke){try{populate(await invoke('default_config'));render(await invoke('status'));refresh();}catch(error){notice(String(error),true);}}
+if(invoke){try{await loadUser();populate(await invoke('default_config'));render(await invoke('status'));refresh();}catch(error){notice(String(error),true);}}
 else{notice('Desktop preview. Launch the Tauri application to configure and run the relay.');}
 controls();
 
@@ -144,3 +202,10 @@ function renderSources(s){
   $('source-overflow').hidden=overflow===0;
   set('source-overflow',`${count(overflow)} datagrams from additional IPs are not individually tracked: the ${count(s.source_tracking_limit??256)}-source limit is reached. Filtering and global counters still apply.`);
 }
+
+function updateOidcControls(){
+  const enabled=$('oidc-enabled').value==='true';
+  $('oidc-fields').hidden=!enabled;
+  for(const id of ['oidc-discovery','oidc-client-id','oidc-public-url','oidc-required-group'])$(id).required=enabled;
+}
+$('oidc-enabled').addEventListener('change',updateOidcControls);

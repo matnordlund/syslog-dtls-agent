@@ -65,7 +65,7 @@ Closing the app stops the relay. This is not an installed daemon or Windows Serv
 
 ## Configuration
 
-See [config.example.toml](config.example.toml). Unknown fields and invalid limits are rejected. Credential paths loaded from TOML are resolved relative to that TOML file. The desktop save action writes absolute credential paths so changing the configuration directory does not change credential identity. Configuration contains references, never inline keys or passwords.
+See [config.example.toml](config.example.toml). Unknown fields and invalid limits are rejected. Credential paths loaded from TOML are resolved relative to that TOML file. The desktop save action writes absolute credential paths so changing the configuration directory does not change credential identity. Certificate settings contain file references. An OIDC client secret is stored directly in TOML; restrict access to the configuration file.
 
 The expected server name defaults to the remote host. To connect to an IP with a DNS certificate, set `remote.expected_server_name` to that DNS name. IP identities must match an IP SAN. DNS identities match DNS SANs (including a full leftmost-label wildcard); legacy common-name fallback is disabled. Internationalized names are converted to ASCII.
 
@@ -157,3 +157,168 @@ Output pacing prevents an immediate queue-drain burst but is not responsive cong
 ## License
 
 MIT. Dependencies retain their own licenses; OpenSSL 3 is Apache-2.0. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). No cryptographic primitives are implemented by this project.
+
+
+### Embedded HTTP interface
+
+The headless agent serves the same UI at **http://127.0.0.1:1080** by default:
+
+```sh
+syslog-dtls-agent run --config agent.toml
+```
+
+Configure the HTTP listen IP and port in Connection → HTTP listener, save, and restart
+the agent process. Missing `[http]` settings default to `address = "127.0.0.1"` and
+`port = 1080`. Relay start/stop does not rebind HTTP. With OIDC disabled, network-facing addresses expose
+unauthenticated HTTP controls; restrict access with a firewall. The desktop app
+only edits these settings for the headless agent.
+
+Use `--http-listen 127.0.0.1:2080` (overrides TOML) to change the port or `--no-http` to disable
+HTTP. Use an IP literal in the browser URL for network access. Host and Origin validation and
+same-origin JSON requests protect browser access from cross-site requests.
+
+The UI and assets are embedded in the executable; no separate web server, Node,
+or Tauri runtime is needed. The desktop app continues to use its native bridge.
+The web UI provides status, source statistics, start/stop, configuration editing,
+and credential validation. Stopping the relay leaves HTTP running so it can be
+started again. Ctrl-C/SIGTERM stops both the relay and the agent.
+
+In browser mode, certificate paths refer to files on the **agent machine**;
+file-upload and native Browse dialogs are not used. Reload configuration reads
+from the file supplied with `--config`; Save configuration writes to that same
+file. Starting with edited settings applies them in memory; save separately to
+persist them. Closing the browser does not stop the relay. Configuration and
+credentials must be valid at initial agent startup, as before.
+
+
+When `--config` is omitted, `run` and `check` load `agent.toml` from the
+executable's directory, independent of the current working directory. Launching
+`syslog-dtls-agent` with no arguments is equivalent to `syslog-dtls-agent run`.
+You can also start it with `syslog-dtls-agent --config ./agent.toml`.
+The `--config` (or `-c`) option works before or after a subcommand.
+An explicit `--config` overrides this default; relative override paths are resolved
+from the current working directory. A missing default file produces a load error;
+it is not created automatically. The HTTP UI reloads/saves the selected file.
+
+### OpenID Connect
+
+In **Connection → OpenID Connect**, enable authentication and set:
+
+- **Discovery URI:** the full URL of the provider's discovery document, typically
+  ending in `/.well-known/openid-configuration`. The agent fetches this exact URI
+  and validates tokens against the issuer advertised by that document.
+- **Client ID:** your registered application's ID.
+- **Client Secret:** saved directly in `agent.toml`, with a masked input in the UI.
+  Leave blank for a public client that supports Authorization Code + PKCE.
+  Authorized administrators can reload/edit the secret; it is redacted from Debug
+  output. Saving through the UI restricts Unix file permissions to `0600`.
+  Windows uses the configuration file's inherited ACLs.
+- **Public URL:** the browser-facing HTTP or HTTPS origin, for example
+  `https://syslog.example.com`. Register
+  `https://syslog.example.com/auth/callback` as an exact redirect URI at the
+  provider. Paths below an origin are not supported.
+- **Group claim:** the exact top-level ID-token claim name (default `groups`;
+  `roles` or a namespaced claim name also works).
+- **Required group:** one exact, case-sensitive group name or ID.
+- **Additional scopes:** provider-specific scopes, separated by spaces.
+  `openid` is always requested.
+
+Configure the provider to emit the group claim in the **ID token**. Its value
+may be a single group string, a comma-separated string (such as
+`"Administrator,Remote_VPN,relay"`), or an array of strings. Comma-separated
+entries are trimmed and matched individually; empty entries are ignored.
+Matching remains exact and case-sensitive, with no substring matches. Array
+members are treated as literal group names.
+Missing/malformed claims, group overage indicators, and nonmembers are denied.
+There is no directory or UserInfo lookup. All admitted users can administer the
+relay; there are no separate read-only roles.
+
+Save and **restart the agent process**. Login protects the UI and every HTTP API
+command, including access over loopback; it does not affect the native Tauri UI.
+Changing or disabling OIDC in saved settings cannot weaken the running listener.
+If settings prevent login, edit TOML locally and restart.
+
+The agent still serves HTTP. Public URLs, discovery documents, and provider
+endpoints may use HTTP or HTTPS, including non-loopback internal addresses.
+HTTP does not encrypt credentials or session cookies. For HTTPS public access,
+terminate TLS at a reverse proxy, preserve the public **Host** header, and
+restrict direct access to the backend listener. The agent pins Host and Origin
+to the configured public URL and does not trust `X-Forwarded-Host` or
+`X-Forwarded-Proto`. HTTPS provider certificate verification remains enabled.
+
+Authentication uses the [openidconnect crate](https://docs.rs/openidconnect/4.0.1/openidconnect/)
+with Authorization Code + S256 PKCE, browser-bound single-use state, nonce,
+signature/issuer/audience/expiry validation, and an exact group check.
+Provider discovery and keys are fetched for each new login, allowing key rotation.
+Discovery or token failures deny login without disabling authentication.
+Provider requests have bounded response sizes and timeouts and do not follow redirects.
+They briefly occupy the HTTP management loop; relay networking runs independently.
+
+Sessions are held in memory and expire at the earlier of one hour or ID-token
+expiry. Group changes take effect on the next login; there is no continuous
+revocation check or refresh-token storage. Restarting the agent invalidates all
+sessions. Cookies are HttpOnly, SameSite=Lax, and Secure with a host-only
+`__Host-` prefix on HTTPS. The user icon in the upper-right corner shows the signed-in username
+(preferred username, then email, then subject) and **Sign out**.
+Signing out invalidates the local session immediately. If discovery advertises
+a valid `end_session_endpoint`, the browser then submits an OIDC logout POST
+to it, including the ID-token hint, client ID, and a return URL.
+Register `<public_url>/auth/signed-out` as an allowed post-logout redirect URI
+at the provider. Providers may display a confirmation page. If no valid endpoint
+is advertised, only local sign-out is performed.
+
+The ID token is retained in memory solely for this logout handoff; it is sent
+to the provider in a form body, never in a URL, API JSON response or log.
+A browser-bound, single-use handoff expires after 60 seconds. If the provider
+is unavailable or refuses logout, the local session remains signed out.
+The relay continues running during sign-out. Up to 64 pending login flows and
+128 active sessions are retained.
+
+Example (under the existing `[http]` settings):
+
+```toml
+[http.oidc]
+enabled = true
+discovery_uri = "https://identity.example.com/realms/company/.well-known/openid-configuration"
+client_id = "syslog-dtls-agent"
+client_secret = "your-client-secret"
+public_url = "https://syslog.example.com"
+groups_claim = "groups"
+required_group = "syslog-operators"
+scopes = ["profile", "groups"]
+```
+
+For a public PKCE client, set `client_secret = ""`. The `groups` scope
+is provider-specific; omit it if your provider does not support it.
+`check` validates OIDC configuration syntax along with the existing relay
+credentials; it does not contact the provider. No environment variable is used for the client secret.
+
+Older disabled OIDC settings can still be loaded. An older `issuer_url` is
+converted to its standard discovery URI. If an enabled legacy configuration
+uses `client_secret_env`, replace it with `client_secret` before restarting;
+the agent does not read or silently substitute environment variables.
+
+
+Debug builds automatically print OIDC diagnostics to stderr with an `[oidc]`
+prefix. On login, these show discovery/JWKS requests and HTTP status codes,
+discovered endpoints, client ID, callback URI, scopes, PKCE, token-exchange
+results and sanitized validation failures. No extra flag is required. Release
+builds do not print these diagnostics. URLs omit credentials, query values and
+fragments; secrets, tokens, codes, cookies, state, nonce and provider error
+descriptions are not logged.
+
+A browser-side IdP error before `/auth/callback` is not observable by the agent.
+If the last message says it is redirecting to the authorization endpoint,
+compare the logged callback URI, client ID and scopes with the IdP registration,
+then inspect the IdP's error page or server logs.
+
+
+Authorization parameters are emitted in this order for provider compatibility:
+`response_type`, `client_id`, `redirect_uri`, `state`, `code_challenge`,
+`code_challenge_method`, `nonce`, `scope`. Values and PKCE verification are unchanged.
+Debug group diagnostics distinguish a missing claim, unsupported type, empty
+array, case mismatch and missing group value. When the configured claim is
+absent, extension claim names are listed. Debug builds also print the verified ID-token
+claims before the group check, including identity and group values. Nonces,
+session identifiers, token hashes, and secret fields are redacted. These debug
+logs can contain personal information such as email and name.

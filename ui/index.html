@@ -18,7 +18,7 @@
       <div class="sidebar-bottom"><span class="version">v0.1.0 · MVP</span><span class="security-tag">DTLS 1.2</span></div>
     </aside>
     <main>
-      <header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <strong id="page-name">Overview</strong></div><span class="local-label"><span class="small-dot"></span> Runs on this device</span></header>
+      <header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <strong id="page-name">Overview</strong></div><div class="topbar-actions"><span class="local-label"><span class="small-dot"></span> Runs on this device</span><div id="user-account" class="user-account" hidden><button id="user-menu-toggle" class="user-menu-toggle" type="button" aria-label="User account" aria-expanded="false" aria-controls="user-menu"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg></button><div id="user-menu" class="user-menu" role="group" aria-label="Signed-in account" hidden><span class="user-menu-caption">Signed in as</span><strong id="user-menu-name">Loading…</strong><button id="oidc-logout" class="user-sign-out" type="button">Sign out</button></div></div></div></header>
       <div class="content">
         <div id="notice" role="status" aria-live="polite" hidden></div>
         <section id="overview" class="page">
@@ -75,20 +75,35 @@
                 <label>Forwarding rate, messages/second<input id="send-rate" type="number" min="1" max="100000" required></label><label>Shutdown drain timeout, ms<input id="drain-timeout" type="number" min="0" max="30000" required></label>
                 <label>Handshake / write timeout, ms<input id="handshake-timeout" type="number" min="100" max="120000" required></label><label>Initial reconnect delay, ms<input id="retry-initial" type="number" min="100" max="60000" required></label><label>Maximum reconnect delay, ms<input id="retry-max" type="number" min="100" max="300000" required></label>
               </div><p class="muted">A frame must fit the negotiated DTLS payload budget. Larger messages are dropped whole, never truncated. Rate limiting is not network congestion control.</p></section>
+              <section class="card form-card"><div class="form-heading"><span class="step">05</span><div><h2>HTTP listener</h2><p>Save the configuration, then restart the agent process to apply these settings. Stopping and starting the relay does not restart HTTP.</p></div></div><div class="form-grid"><label>Listen IP address<input id="http-address" placeholder="127.0.0.1" spellcheck="false"><small>IPv4 or IPv6. Leave blank for 127.0.0.1.</small></label><label>Listen port<input id="http-port" type="number" min="1" max="65535" placeholder="1080"><small>Leave blank for 1080.</small></label></div><p class="muted">Without OIDC, HTTP has no authentication. A network-facing IP exposes agent controls to other devices. Use loopback for local access or restrict access with a firewall. These settings apply to the headless agent; the desktop app does not start an HTTP listener. A command-line --http-listen override takes precedence.</p></section>
+              <section class="card form-card"><div class="form-heading"><span class="step">06</span><div><h2>OpenID Connect</h2><p>Protect the HTTP interface with your identity provider and a required group. Save and restart the agent process to apply changes.</p></div></div>
+                <div class="form-grid"><label class="full">HTTP authentication<select id="oidc-enabled"><option value="false">Disabled</option><option value="true">OpenID Connect</option></select></label></div>
+                <div id="oidc-fields" class="form-grid" hidden>
+                  <label class="full">Discovery URI<input id="oidc-discovery" placeholder="https://identity.example.com/realms/company/.well-known/openid-configuration" spellcheck="false"><small>Full URL of the provider’s OpenID Connect discovery document.</small></label>
+                  <label>Client ID<input id="oidc-client-id" spellcheck="false"></label>
+                  <label>Client Secret <span class="optional">optional</span><input id="oidc-client-secret" type="password" autocomplete="new-password" spellcheck="false"><small>Saved in agent.toml. Leave blank for a public PKCE client.</small></label>
+                  <label class="full">Public URL<input id="oidc-public-url" placeholder="https://syslog.example.com" spellcheck="false"><small>HTTP or HTTPS origin, without a path. Register this URL plus /auth/callback with your provider.</small></label>
+                  <label>Group claim<input id="oidc-groups-claim" placeholder="groups" spellcheck="false"><small>Exact top-level ID-token claim name, for example groups or roles. Accepts a group string, comma-separated groups, or a string array.</small></label>
+                  <label>Required group<input id="oidc-required-group" placeholder="syslog-operators" spellcheck="false"><small>Exact, case-sensitive group name or ID. Users without this value are denied.</small></label>
+                  <label class="full">Additional scopes <span class="optional">optional</span><input id="oidc-scopes" placeholder="profile groups" spellcheck="false"><small>Space-separated scopes required by your provider. openid is always requested. Configure the provider to include the group claim in the ID token.</small></label>
+                </div>
+                <p class="muted">When enabled, login protects all HTTP access, including loopback. Sessions expire within one hour or at ID-token expiry. HTTP is supported; HTTPS protects credentials and sessions in transit. The desktop interface continues to use native access.</p>
+              </section>
             </fieldset>
           </form>
-          <div class="settings-footer"><span>Configuration contains file references only.</span><button id="start-from-settings" class="button primary">Start relay ↗</button></div>
+          <div class="settings-footer"><span>OIDC client secrets are saved in the configuration file.</span><button id="start-from-settings" class="button primary">Start relay ↗</button></div>
         </section>
         <section id="diagnostics" class="page" hidden>
           <div class="page-heading"><div><div class="eyebrow">DIAGNOSTICS</div><h1>Know what’s happening.</h1><p class="subtitle">Session counters and public connection metadata. No message contents.</p></div></div>
           <div class="card"><h2>Drop accounting</h2><dl class="diagnostic-list"><div><dt>Source IP not allowed</dt><dd id="drop-denied">0</dd></div><div><dt>Invalid RFC 5424 input</dt><dd id="drop-invalid">0</dd></div><div><dt>Input or DTLS frame too large</dt><dd id="drop-oversized">0</dd></div><div><dt>Queue full</dt><dd id="drop-full">0</dd></div><div><dt>Discarded on shutdown</dt><dd id="drop-shutdown">0</dd></div><div><dt>Reconnect / failure count</dt><dd id="retry-count">0</dd></div></dl></div>
           <div class="card"><h2>Association details</h2><dl class="diagnostic-list"><div><dt>Active remote address</dt><dd id="active-address">—</dd></div><div><dt>Protocol</dt><dd id="protocol">—</dd></div><div><dt>Cipher</dt><dd id="cipher">—</dd></div><div><dt>Client certificate fingerprint</dt><dd id="client-fingerprint" class="fingerprint">—</dd></div><div><dt>Last peer certificate fingerprint</dt><dd id="peer-fingerprint" class="fingerprint">—</dd></div></dl></div>
-          <p class="muted">Counters reset on each start. Queue depth includes in-flight messages. Kernel and network loss may be unobservable. Closing the application stops the relay; this MVP is not an installed system service.</p>
+          <p id="session-note" class="muted">Counters reset on each start. Queue depth includes in-flight messages. Kernel and network loss may be unobservable. Closing the application stops the relay; this MVP is not an installed system service.</p>
         </section>
       </div>
       <footer class="app-footer"><span><span class="small-dot"></span> Server verification always on</span><span>Open source · Built with Rust</span></footer>
     </main>
   </div>
+  <script src="agent-mode.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -6,6 +6,25 @@ mode = "any"
 # Exact IPv4 / IPv6 addresses. An empty allowlist blocks every source in allowlist mode.
 allowed_ips = []
 
+[http]
+# Restart the agent process after changing these settings.
+address = "127.0.0.1"
+port = 1080
+
+# Optional HTTP login. Save changes and restart the agent process.
+[http.oidc]
+enabled = false
+discovery_uri = ""
+client_id = ""
+# Stored in this file; restrict file access. Blank for a public PKCE client.
+client_secret = ""
+# HTTP or HTTPS origin; callback is <public_url>/auth/callback.
+public_url = ""
+# Configure the provider to emit this top-level claim in the ID token.
+groups_claim = "groups"
+required_group = ""
+scopes = []
+
 [listener]
 address = "127.0.0.1"
 port = 1514

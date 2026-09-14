@@ -115,3 +115,14 @@ progress::-moz-progress-bar{background:#457ea4}
 #overview .info-tip{position:absolute;top:12px;right:14px}
 #overview .metric-name,#overview .sources-card .card-top,#overview .queue-card .card-top{padding-right:30px}
 #overview .info-tooltip{left:auto;right:0}
+
+/* Signed-in account menu. */
+.topbar-actions{display:flex;align-items:center;gap:16px;margin-left:auto}
+.user-account{position:relative}
+.user-menu-toggle{width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--border);border-radius:50%;background:#202428;color:#b8cee0;padding:0}
+.user-menu-toggle:hover,.user-menu-toggle[aria-expanded="true"]{background:#2b343c;border-color:#6c8fa9}
+.user-menu{position:absolute;top:calc(100% + 9px);right:0;z-index:50;width:260px;max-width:calc(100vw - 100px);padding:16px;background:#202428;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 32px #0006}
+.user-menu-caption{display:block;color:var(--muted);font-size:11px;margin-bottom:6px}
+#user-menu-name{display:block;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.user-sign-out{display:block;width:100%;text-align:left;margin-top:14px;padding:12px 0 0;border:0;border-top:1px solid var(--border);background:transparent;color:#e5ebf0;font-size:12px}
+.user-sign-out:hover{color:#8dbce0}

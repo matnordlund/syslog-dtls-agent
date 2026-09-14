@@ -9,6 +9,8 @@ use std::{
 pub struct Config {
     pub schema_version: u32,
     pub listener: Listener,
+    #[serde(default)]
+    pub http: Http,
     pub remote: Remote,
     pub identity: Identity,
     pub trust: Trust,
@@ -18,6 +20,23 @@ pub struct Config {
     pub queue: Queue,
     #[serde(default)]
     pub dtls: Dtls,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Http {
+    pub oidc: crate::oidc::Oidc,
+    pub address: IpAddr,
+    pub port: u16,
+}
+impl Default for Http {
+    fn default() -> Self {
+        Self {
+            address: IpAddr::from([127, 0, 0, 1]),
+            port: 1080,
+            oidc: Default::default(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -130,6 +149,7 @@ impl Default for Config {
         Self {
             schema_version: 1,
             listener: Listener::default(),
+            http: Http::default(),
             remote: Remote {
                 host: "collector.example.com".into(),
                 port: 6514,
@@ -167,6 +187,29 @@ impl Config {
     pub fn to_toml(&self) -> Result<String, String> {
         toml::to_string_pretty(self).map_err(|_| "Cannot serialize configuration".into())
     }
+    pub fn save(&self, path: &Path) -> Result<(), String> {
+        use std::io::Write;
+        let text = self.to_toml()?;
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options
+            .open(path)
+            .map_err(|_| "Cannot save configuration".to_string())?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            file.set_permissions(std::fs::Permissions::from_mode(0o600))
+                .map_err(|_| "Cannot restrict configuration permissions".to_string())?;
+        }
+        file.set_len(0)
+            .and_then(|_| file.write_all(text.as_bytes()))
+            .map_err(|_| "Cannot save configuration".to_string())
+    }
     pub fn resolve_paths(&mut self, base: &Path) {
         let Identity::Pem {
             certificate_chain,
@@ -188,13 +231,14 @@ impl Config {
         )
     }
     pub fn validate(&self) -> Result<(), String> {
+        self.http.oidc.validate()?;
         if self.schema_version != 1 {
             return Err("Unsupported configuration schema version".into());
         }
         if self.source_access.allowed_ips.len() > 4096 {
             return Err("Allowlist supports at most 4096 IP addresses".into());
         }
-        if self.listener.port == 0 || self.remote.port == 0 {
+        if self.listener.port == 0 || self.remote.port == 0 || self.http.port == 0 {
             return Err("Ports must be between 1 and 65535".into());
         }
         normalize_name(&self.remote.host)?;
@@ -271,6 +315,31 @@ mod tests {
     fn reject_unknown_and_insecure_fields() {
         let t = Config::default().to_toml().unwrap();
         assert!(Config::parse(&format!("verify_server = false\n{t}"), Path::new(".")).is_err());
+    }
+    #[test]
+    fn http_defaults_roundtrip_and_validation() {
+        let mut value = toml::Value::try_from(Config::default()).unwrap();
+        value.as_table_mut().unwrap().remove("http");
+        let old = toml::to_string(&value).unwrap();
+        for suffix in ["", "\n[http]\n", "\n[http]\naddress = '::1'\n"] {
+            let cfg = Config::parse(&format!("{old}{suffix}"), Path::new(".")).unwrap();
+            assert_eq!(cfg.http.port, 1080);
+        }
+        let cfg = Config::parse(&old, Path::new(".")).unwrap();
+        assert_eq!(cfg.http.address.to_string(), "127.0.0.1");
+        let mut cfg = cfg;
+        cfg.http.address = "192.0.2.1".parse().unwrap();
+        cfg.http.port = 2080;
+        let loaded = Config::parse(&cfg.to_toml().unwrap(), Path::new(".")).unwrap();
+        assert_eq!(loaded.http.port, 2080);
+        assert_eq!(loaded.http.address, cfg.http.address);
+        cfg.http.port = 0;
+        assert!(cfg.validate().is_err());
+        assert!(Config::parse(
+            &format!("{old}\n[http]\naddress = 'invalid'"),
+            Path::new(".")
+        )
+        .is_err());
     }
     #[test]
     fn names() {

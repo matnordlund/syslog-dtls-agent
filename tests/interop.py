@@ -185,7 +185,7 @@ def case(directory, name, hostname="collector.test", ca="ca.pem", loss=False, re
     proxy = LossProxy(remote_port) if loss else None
     path = directory / f"{name}.toml"
     path.write_text(configuration(directory, listener_port, proxy.port if proxy else remote_port, hostname, ca))
-    relay = Process([AGENT, "run", "--config", path, "--status-interval", "1"], lines=True)
+    relay = Process([AGENT, "run", "--no-http", "--config", path, "--status-interval", "1"], lines=True)
     try:
         wait_for(lambda: relay.status.get("listener_status") == "listening", f"listener did not start: {bytes(relay.errors)!r}")
         message = "<34>1 2026-09-09T12:00:00Z host app 42 ID - hälsning\n".encode()
